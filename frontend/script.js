@@ -16,6 +16,16 @@ function addMessage(text, cls) {
   return div;
 }
 
+function renderMarkdown(el, text) {
+  // marked: Markdown -> HTML. DOMPurify: strips anything unsafe (XSS protection).
+  if (window.marked && window.DOMPurify) {
+    el.innerHTML = DOMPurify.sanitize(marked.parse(text));
+  } else {
+    el.textContent = text; // fallback if the CDN scripts failed to load
+  }
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
 function addSources(msgEl, sources) {
   const details = document.createElement("details");
   details.className = "sources";
@@ -63,7 +73,8 @@ async function sendMessage() {
 
     const { reply, sources } = await res.json();
     loading.remove();
-    const msgEl = addMessage(reply, "msg--model");
+    const msgEl = addMessage("", "msg--model");
+    renderMarkdown(msgEl, reply);
     if (sources && sources.length) addSources(msgEl, sources);
     history.push({ role: "user", content: text }, { role: "model", content: reply });
   } catch (e) {

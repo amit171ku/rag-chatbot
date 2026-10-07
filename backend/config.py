@@ -1,16 +1,31 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv(override=True)
+load_dotenv(override=True)  # .env wins over system environment variables
+
 
 class Settings:
+    # Gemini: embeddings only
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
-    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+
+    # Groq (OpenAI-compatible API): answer generation
+    llm_api_key: str = os.getenv("LLM_API_KEY", "")
+    llm_base_url: str = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1")
+    llm_model: str = os.getenv("LLM_MODEL", "")
 
     def validate(self) -> None:
-        if not self.gemini_api_key:
-            raise RuntimeError("GEMINI_API_KEY is missing. Set it in backend/.env")
+        missing = [
+            name
+            for name, value in {
+                "GEMINI_API_KEY": self.gemini_api_key,
+                "LLM_API_KEY": self.llm_api_key,
+                "LLM_MODEL": self.llm_model,
+            }.items()
+            if not value
+        ]
+        if missing:
+            raise RuntimeError(f"Missing in backend/.env: {', '.join(missing)}")
 
 
 settings = Settings()
-settings.validate() 
+settings.validate()  # fail fast at startup

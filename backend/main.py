@@ -6,7 +6,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from google import genai
-from google.genai import types
+from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from chunking import chunk_text
@@ -33,9 +33,10 @@ TOP_K = 5
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 
-client = genai.Client(api_key=settings.gemini_api_key)
+client = genai.Client(api_key=settings.gemini_api_key)  # Gemini: embeddings only
+llm = AsyncOpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)  # Groq: generation
 store = VectorStore()
-app = FastAPI(title="Gemini Chatbot")
+app = FastAPI(title="RAG Chatbot")
 
 
 class Message(BaseModel):
@@ -47,10 +48,12 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     history: list[Message] = Field(default_factory=list, max_length=50)
 
+
 class Source(BaseModel):
     score: float
     text: str
-    
+
+
 class ChatResponse(BaseModel):
     reply: str
     grounded: bool = False
@@ -59,7 +62,7 @@ class ChatResponse(BaseModel):
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "model": settings.gemini_model, "document": store.filename}
+    return {"status": "ok", "model": settings.llm_model, "document": store.filename}
 
 
 @app.post("/api/chat", response_model=ChatResponse)
@@ -80,34 +83,36 @@ async def chat(req: ChatRequest):
         grounded = True
         sources = [Source(score=round(s, 3), text=c) for s, c in hits]
 
-    contents = [
-        types.Content(role=m.role, parts=[types.Part(text=m.content)])
+    # OpenAI-style messages. The frontend sends role "model"; the API expects "assistant".
+    messages = [{"role": "system", "content": system_prompt}]
+    messages += [
+        {"role": "assistant" if m.role == "model" else "user", "content": m.content}
         for m in req.history
     ]
-    contents.append(types.Content(role="user", parts=[types.Part(text=req.message)]))
+    messages.append({"role": "user", "content": req.message})
 
     try:
-        response = await client.aio.models.generate_content(
-            model=settings.gemini_model,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=0.2 if grounded else 0.7,
-            ),
+        response = await llm.chat.completions.create(
+            model=settings.llm_model,
+            messages=messages,
+            temperature=0.2 if grounded else 0.7,
         )
-    except Exception:
-        logger.exception("Gemini request failed")
-        raise HTTPException(502, "Upstream model error. Check server logs.")
+    except Exception as e:
+        # TEMPORARY debug: shows the real error in the chat bubble.
+        # Change back to a generic message before deploying.
+        logger.exception("LLM request failed")
+        raise HTTPException(502, f"LLM error: {type(e).__name__}: {str(e)[:300]}")
 
-    if not response.text:
+    text = response.choices[0].message.content
+    if not text:
         raise HTTPException(502, "Model returned an empty response.")
 
-    return ChatResponse(reply=response.text, grounded=grounded, sources=sources)
+    return ChatResponse(reply=text, grounded=grounded, sources=sources)
 
 
 @app.get("/api/search")
 async def search(q: str, k: int = TOP_K):
-    """Debug endpoint: test retrieval on its own, without Gemini generation."""
+    """Debug endpoint: test retrieval on its own, without LLM generation."""
     if not store.ready:
         raise HTTPException(409, "No document uploaded yet.")
     qvec = (await embed(client, [q], "RETRIEVAL_QUERY"))[0]
@@ -142,8 +147,7 @@ async def upload(file: UploadFile = File(...)):
         vectors = await embed(client, chunks, "RETRIEVAL_DOCUMENT")
     except Exception:
         logger.exception("Embedding failed for %s", filename)
-        raise HTTPException(502, "Embedding failed. Check server logs (key, quota, model name).")
-
+        raise HTTPException(502, "Upstream model error. Check server logs.")
     store.set(filename, chunks, vectors)
 
     return {
