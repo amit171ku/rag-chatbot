@@ -106,6 +106,9 @@ async def chat(req: ChatRequest):
     text = response.choices[0].message.content
     if not text:
         raise HTTPException(502, "Model returned an empty response.")
+    # Hide sources when the model says the answer isn't in the document
+    if text.strip().startswith("I couldn't find that in the document"):
+        sources = []
 
     return ChatResponse(reply=text, grounded=grounded, sources=sources)
 
