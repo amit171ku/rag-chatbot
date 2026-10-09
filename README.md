@@ -64,7 +64,7 @@ cp .env.example .env            # Windows: copy .env.example .env
 uvicorn main:app --reload
 ```
 
-Open  https://gemini-rag-chatbot-vgz7.onrender.com , click **Upload**, then ask a question.
+Open http://localhost:8000, click **Upload**, then ask a question. 
 
 ### Environment variables (`backend/.env`)
 
