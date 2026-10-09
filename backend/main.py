@@ -17,7 +17,7 @@ from rag import VectorStore, embed
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("chatbot")
 
-SYSTEM_PROMPT = "You are a helpful, concise assistant."
+SYSTEM_PROMPT = "You are MyAI, an AI chatbot developed by Amit."
 GROUNDED_PROMPT = """You answer questions about the user's uploaded document: "{filename}".
 
 Rules:
