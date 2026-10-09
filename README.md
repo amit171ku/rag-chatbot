@@ -2,9 +2,7 @@
 
 Upload a PDF, DOCX, or TXT file and ask questions about it. Answers are grounded in the document and shown with the source chunks used.
 
-**Live demo:** TODO_RENDER_URL (free tier: the first load can take about a minute)
-
-
+**Live demo:** https://gemini-rag-chatbot-vgz7.onrender.com/ (free tier: the first load can take about a minute)
 
 ## Features
 
@@ -66,7 +64,7 @@ cp .env.example .env            # Windows: copy .env.example .env
 uvicorn main:app --reload
 ```
 
-Open http://localhost:8000, click **Upload**, then ask a question.
+Open  https://gemini-rag-chatbot-vgz7.onrender.com , click **Upload**, then ask a question.
 
 ### Environment variables (`backend/.env`)
 
